@@ -80,7 +80,17 @@ directive('model', ({ el, directive, component, cleanup }) => {
             ? component.$wire.$parent.$commit()
             : component.$wire.$commit()
 
-        return () => action._livewireAction.cancel()
+        return () => {
+            if (action && action._livewireAction) {
+                let livewireAction = action._livewireAction
+
+                livewireAction.cancel()
+
+                if (livewireAction.message && livewireAction.message.request) {
+                    livewireAction.message.request.cancel()
+                }
+            }
+        }
     }
 
     let debouncedUpdate = update
@@ -225,16 +235,25 @@ export function debounce(func, wait) {
 
 function throttle(func, limit) {
     let inThrottle
+    let cancel
 
     return function() {
         let context = this, args = arguments
 
-        if (! inThrottle) {
-            func.apply(context, args)
+        if (cancel) cancel()
 
+        if (! inThrottle) {
             inThrottle = true
 
             setTimeout(() => inThrottle = false, limit)
+
+            let result = func.apply(context, args)
+
+            if (typeof result === 'function') {
+                cancel = result
+            } else {
+                cancel = undefined
+            }
         }
     }
 }

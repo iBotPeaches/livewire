@@ -24,6 +24,8 @@ export function debounceByComponent(component, callback, time) {
 
     return e => {
         // If there's a pending cancellation from the previous execution, call it now.
+        // We do this BEFORE clearing the timeout, so that if the user types quickly,
+        // we cancel any in-flight request from a PREVIOUSLY COMPLETED debounce.
         if (callbackRegister.cancel) callbackRegister.cancel()
 
         clearTimeout(timeout)
@@ -47,6 +49,9 @@ export function debounceByComponent(component, callback, time) {
 
         // Register the current callback in the register as a kind-of "escape-hatch".
         callbackRegister.callback = () => {
+            // If there's a pending cancellation from the previous execution, call it now.
+            if (callbackRegister.cancel) callbackRegister.cancel()
+
             clearTimeout(timeout)
 
             let result = callback(e)

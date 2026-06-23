@@ -66,10 +66,10 @@ export function coordinateNetworkInteractions(messageBus) {
             }
 
             // Wire:model.live:
-            // - If both incoming and outgoing requests are model.live, let them run in parallel...
+            // - If both incoming and outgoing requests are model.live, cancel the in-flight one...
             if (Array.from(message.actions).every(action => action.metadata.type === 'model.live')) {
                 if (action.metadata.type === 'model.live') {
-                    return
+                    return message.cancel()
                 }
             }
 

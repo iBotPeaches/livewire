@@ -66,7 +66,9 @@ directive('model', ({ el, directive, component, cleanup }) => {
     let isDebounced = networkModifiers.includes('debounce')
     let isThrottled = networkModifiers.includes('throttle')
 
-    // Trigger a network request
+    // Trigger a network request.
+    // We return a cancellation function that allows the debounce/throttle
+    // mechanism to cancel the in-flight network request if needed.
     let update = () => {
         setNextActionOrigin({ el, directive })
 
@@ -74,9 +76,11 @@ directive('model', ({ el, directive, component, cleanup }) => {
             setNextActionMetadata({ type: 'model.live' })
         }
 
-        expression.startsWith('$parent')
+        let action = expression.startsWith('$parent')
             ? component.$wire.$parent.$commit()
             : component.$wire.$commit()
+
+        return () => action._livewireAction.cancel()
     }
 
     let debouncedUpdate = update
@@ -190,16 +194,27 @@ function componentIsMissingProperty(component, property) {
     return ! Object.keys(component.canonical).includes(baseProperty)
 }
 
-function debounce(func, wait) {
+export function debounce(func, wait) {
     var timeout;
+    var cancel;
 
     return function() {
       var context = this, args = arguments;
 
+      // If there's a pending cancellation from the previous execution, call it now.
+      if (cancel) cancel()
+
       var later = function() {
             timeout = null
 
-            func.apply(context, args)
+            let result = func.apply(context, args)
+
+            if (typeof result === 'function') {
+                // Store the returned cancellation function so we can call it later.
+                cancel = result
+            } else {
+                cancel = undefined
+            }
       }
 
       clearTimeout(timeout)

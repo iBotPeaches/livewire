@@ -10,6 +10,10 @@ export function debounceByComponent(component, callback, time) {
     // This is a modified debounce function that acts just like a debounce, except it stores
     // the pending callbacks in a global property so we can "clear them" on command instead
     // of waiting for their setTimeouts to expire. I know.
+    //
+    // Additionally, if the callback returns a function, that function is treated as a
+    // cancellation hook and will be called before the next debounced execution or
+    // when debounces are cleared.
 
     // This is a "null" callback. Each wire:model will resister one of these upon initialization.
     let callbackRegister = { callback: () => { } }
@@ -19,10 +23,21 @@ export function debounceByComponent(component, callback, time) {
     var timeout
 
     return e => {
+        // If there's a pending cancellation from the previous execution, call it now.
+        if (callbackRegister.cancel) callbackRegister.cancel()
+
         clearTimeout(timeout)
 
         timeout = setTimeout(() => {
-            callback(e)
+            let result = callback(e)
+
+            if (typeof result === 'function') {
+                // Store the returned cancellation function so we can call it later.
+                callbackRegister.cancel = result
+            } else {
+                callbackRegister.cancel = undefined
+            }
+
             timeout = undefined
 
             // Because we just called the callback, let's return the
@@ -33,7 +48,15 @@ export function debounceByComponent(component, callback, time) {
         // Register the current callback in the register as a kind-of "escape-hatch".
         callbackRegister.callback = () => {
             clearTimeout(timeout)
-            callback(e)
+
+            let result = callback(e)
+
+            if (typeof result === 'function') {
+                // Store the returned cancellation function so we can call it later.
+                callbackRegister.cancel = result
+            } else {
+                callbackRegister.cancel = undefined
+            }
         }
     }
 }
@@ -46,6 +69,9 @@ export function callAndClearComponentDebounces(component, callback) {
     // of the debounce. This makes sure to clear anything in the debounce queue.
 
     callbacksByComponent.each(component, callbackRegister => {
+        // If there's a pending cancellation, call it before manually firing the callback.
+        if (callbackRegister.cancel) callbackRegister.cancel()
+
         callbackRegister.callback()
         callbackRegister.callback = () => { }
     })

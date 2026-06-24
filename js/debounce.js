@@ -74,8 +74,12 @@ export function callAndClearComponentDebounces(component, callback) {
     // of the debounce. This makes sure to clear anything in the debounce queue.
 
     callbacksByComponent.each(component, callbackRegister => {
-        // If there's a pending cancellation, call it before manually firing the callback.
-        if (callbackRegister.cancel) callbackRegister.cancel()
+        // Call any pending cancel hook first and clear it, so that
+        // callbackRegister.callback() (which also checks cancel) doesn't fire it twice.
+        if (callbackRegister.cancel) {
+            callbackRegister.cancel()
+            callbackRegister.cancel = undefined
+        }
 
         callbackRegister.callback()
         callbackRegister.callback = () => { }

@@ -82,13 +82,7 @@ directive('model', ({ el, directive, component, cleanup }) => {
 
         return () => {
             if (action && action._livewireAction) {
-                let livewireAction = action._livewireAction
-
-                livewireAction.cancel()
-
-                if (livewireAction.message && livewireAction.message.request) {
-                    livewireAction.message.request.cancel()
-                }
+                action._livewireAction.cancel()
             }
         }
     }
@@ -240,12 +234,12 @@ function throttle(func, limit) {
     return function() {
         let context = this, args = arguments
 
-        if (cancel) cancel()
-
         if (! inThrottle) {
             inThrottle = true
 
             setTimeout(() => inThrottle = false, limit)
+
+            if (cancel) cancel()
 
             let result = func.apply(context, args)
 

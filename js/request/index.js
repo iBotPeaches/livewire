@@ -4,7 +4,7 @@ import { MessageRequest, PageRequest } from './request.js'
 import { InterceptorRegistry } from './interceptor.js'
 import { trigger, triggerAsync } from '@/hooks.js'
 import { showHtmlModal } from '@/utils/modal.js'
-import { MessageBus, scopeSymbolFromMessage } from './messageBus.js'
+import { MessageBus, scopeSymbolFromMessage, incrementComponentLiveVersion, getComponentLiveVersion } from './messageBus.js'
 import Message from './message.js'
 import Action from './action.js'
 
@@ -278,6 +278,13 @@ function sendMessages() {
                 updates: message.updates,
                 calls: message.calls,
             }
+
+            // Assign a monotonically increasing version to model.live-only messages so stale
+            // responses (older requests returning after newer ones) can be safely ignored.
+            let isModelLiveOnly = Array.from(message.actions).every(action => action.metadata.type === 'model.live')
+            if (isModelLiveOnly) {
+                message.liveVersion = incrementComponentLiveVersion(message.component)
+            }
         })
     })
 
@@ -438,6 +445,15 @@ function sendMessages() {
                         let snapshot = JSON.parse(snapshotEncoded)
 
                         if (snapshot.memo.id === message.component.id) {
+                            // Skip stale model.live responses: if a newer request for this
+                            // component has already been sent, this response is outdated and
+                            // must not overwrite the DOM, snapshot, or effects.
+                            if (message.liveVersion !== undefined && message.liveVersion < getComponentLiveVersion(message.component)) {
+                                message.resolveActionPromises([], [])
+                                message.invokeOnFinish()
+                                return
+                            }
+
                             message.responsePayload = { snapshot, effects }
 
                             message.invokeOnSuccess()
